@@ -28,6 +28,67 @@ export class SwissEphWasmProvider implements EphemerisProvider {
   private async ensureInit() {
     if (!this.isInitialized) {
       this.swe = new SwissEph();
+
+      // Ensure wasm & data paths resolve correctly both in local Node, Vercel Serverless, and Next.js
+      if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          
+          // Candidate paths where Vercel and local put the wasm/data
+          const possibleDirs = [
+            path.resolve(process.cwd(), 'public/wasm'),
+            path.resolve(process.cwd(), 'node_modules/swisseph-wasm/wasm'),
+            path.resolve(process.cwd(), '.next/server/chunks'),
+            '/var/task/public/wasm',
+            '/var/task/node_modules/swisseph-wasm/wasm',
+          ];
+
+          let foundDir: string | null = null;
+          for (const d of possibleDirs) {
+            if (fs.existsSync(path.join(d, 'swisseph.wasm'))) {
+              foundDir = d;
+              break;
+            }
+          }
+
+          if (foundDir) {
+            const wasmPath = path.join(foundDir, 'swisseph.wasm');
+            const dataPath = path.join(foundDir, 'swisseph.data');
+            const wasmBuf = fs.readFileSync(wasmPath);
+            const dataBuf = fs.existsSync(dataPath) ? fs.readFileSync(dataPath) : null;
+
+            // Load underlying Emscripten module directly with binary buffers
+            const { pathToFileURL } = await import('url');
+            const wasmJsPath = pathToFileURL(path.join(foundDir, 'swisseph.js')).href;
+            const { default: WasmSwissEph } = await import(wasmJsPath);
+
+            const mod = await WasmSwissEph({
+              wasmBinary: wasmBuf,
+              getPreloadedPackage: dataBuf ? () => dataBuf.buffer : undefined,
+              locateFile: (p: string) => path.join(foundDir!, p),
+            });
+
+            // Attach initialized module to this.swe
+            (this.swe as any)._customModule = mod;
+            // Override SweModule getter via Object.defineProperty
+            Object.defineProperty(this.swe, 'SweModule', {
+              get: () => mod,
+              configurable: true,
+            });
+
+            if (!mod.HEAP32) {
+              mod.HEAP32 = new Int32Array(mod.HEAPF64.buffer);
+            }
+            this.swe.set_ephe_path('sweph');
+            this.isInitialized = true;
+            return;
+          }
+        } catch (err) {
+          console.warn('Custom wasm buffer loader failed, falling back to default initSwissEph:', err);
+        }
+      }
+
       await this.swe.initSwissEph();
       this.isInitialized = true;
     }

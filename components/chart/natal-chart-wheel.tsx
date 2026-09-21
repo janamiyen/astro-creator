@@ -44,14 +44,12 @@ export const NatalChartWheel: React.FC<NatalChartWheelProps> = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row items-center gap-8 justify-center">
-      {/* SVG Wheel */}
-      <div className="relative" style={{ width: size, height: size }}>
+    <div className="flex flex-col lg:flex-row items-center gap-8 justify-center w-full">
+      {/* SVG Wheel Responsive */}
+      <div className="relative w-full max-w-[340px] sm:max-w-[460px] md:max-w-[560px] aspect-square flex items-center justify-center">
         <svg
-          width={size}
-          height={size}
-          className="select-none overflow-visible"
           viewBox={`0 0 ${size} ${size}`}
+          className="w-full h-full select-none overflow-visible"
         >
           <defs>
             <radialGradient id="observatoryGlow" cx="50%" cy="50%" r="50%">
