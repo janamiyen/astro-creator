@@ -3,6 +3,7 @@ import { CREATOR_RULES, CreatorCategory, RuleMatch } from './rules/timing-rules'
 import { getNicheTranslation } from './niches/niche-adapter';
 import { EphemerisProvider } from '../astronomy/providers/ephemeris-provider.interface';
 import { findAspect } from '../astronomy/aspects/aspect-calculator';
+import { DateTime } from 'luxon';
 
 export interface TimeWindow {
   id: string;
@@ -69,17 +70,19 @@ export class CreatorTimingEngine {
       maxOrb: 3.0,
     });
 
-    // 2. High-resolution intraday Moon tracking (96 intervals across the 24h day)
-    const dayStart = new Date(
-      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0)
-    );
-    const dayEnd = new Date(
-      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59)
-    );
+    const userTimezone = natalChart.input.timezone || 'America/Argentina/Buenos_Aires';
+    const evalDt = DateTime.fromJSDate(date).setZone(userTimezone);
+
+    // 2. Local midnight to 23:59:59 converted to UTC timestamps for high-res tracking
+    const localDayStart = evalDt.startOf('day');
+    const localDayEnd = evalDt.endOf('day');
+
+    const dayStartUtc = localDayStart.toUTC().toJSDate();
+    const dayEndUtc = localDayEnd.toUTC().toJSDate();
 
     const moonPoints = await this.provider.calculateIntradayMoon({
-      startTimeUtc: dayStart,
-      endTimeUtc: dayEnd,
+      startTimeUtc: dayStartUtc,
+      endTimeUtc: dayEndUtc,
       stepMinutes: 15,
     });
 
@@ -160,7 +163,7 @@ export class CreatorTimingEngine {
     }
 
     // 4. Cluster 15-minute intervals into human windows (e.g. 18:15–20:00)
-    const rawWindows = this.clusterIntervalsIntoWindows(intervalsWithAspects, niche);
+    const rawWindows = this.clusterIntervalsIntoWindows(intervalsWithAspects, niche, userTimezone);
 
     // Fallback guaranteed windows if sky is slow (at least 3 windows)
     const finalWindows =
@@ -263,7 +266,8 @@ export class CreatorTimingEngine {
       category: CreatorCategory;
       matchedRules: RuleMatch[];
     }>,
-    niche: any
+    niche: any,
+    userTimezone: string
   ): TimeWindow[] {
     if (intervals.length === 0) return [];
 
@@ -282,20 +286,20 @@ export class CreatorTimingEngine {
           currentCluster.push(curr);
         } else {
           // Finish cluster
-          windows.push(this.buildWindowFromCluster(currentCluster, niche));
+          windows.push(this.buildWindowFromCluster(currentCluster, niche, userTimezone));
           currentCluster = [curr];
         }
       }
     }
 
     if (currentCluster.length > 0) {
-      windows.push(this.buildWindowFromCluster(currentCluster, niche));
+      windows.push(this.buildWindowFromCluster(currentCluster, niche, userTimezone));
     }
 
     return windows;
   }
 
-  private buildWindowFromCluster(cluster: any[], niche: any): TimeWindow {
+  private buildWindowFromCluster(cluster: any[], niche: any, userTimezone: string): TimeWindow {
     const first = cluster[0];
     const last = cluster[cluster.length - 1];
     const category: CreatorCategory = first.category;
@@ -306,14 +310,19 @@ export class CreatorTimingEngine {
     // Pick top rule match
     const topRule = allMatches.sort((a, b) => b.scoreBonus - a.scoreBonus)[0] || allMatches[0];
 
-    const formatH = (d: Date) =>
-      `${d.getUTCHours().toString().padStart(2, '0')}:${d
-        .getUTCMinutes()
-        .toString()
-        .padStart(2, '0')}`;
+    const userTz = userTimezone || 'America/Argentina/Buenos_Aires';
+    const formatH = (d: Date) => {
+      const dt = DateTime.fromJSDate(d).setZone(userTz);
+      return dt.toFormat('HH:mm');
+    };
 
     const startTime = formatH(first.time);
-    const endTime = formatH(new Date(last.time.getTime() + 15 * 60 * 1000));
+    // End time is 15 minutes after last interval
+    const endDt = DateTime.fromJSDate(last.time).setZone(userTz).plus({ minutes: 15 });
+    // If endDt rolled into next day (00:00 or after), clamp to 23:59 or end time string
+    const endTime = endDt.day !== DateTime.fromJSDate(first.time).setZone(userTz).day && endDt.hour === 0 && endDt.minute === 0
+      ? '23:59'
+      : endDt.toFormat('HH:mm');
 
     const advice = niche.categoryAdvice[category];
     const keywords = Array.from(new Set(allMatches.flatMap((m) => m.keywords)));

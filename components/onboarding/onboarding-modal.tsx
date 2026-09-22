@@ -49,6 +49,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     e.preventDefault();
     if (!birthDate) return;
 
+    const parts = birthDate.split('-');
+    const year = parseInt(parts[0], 10);
+    if (isNaN(year) || year < 1900 || year > 2100) {
+      alert('Por favor ingresá un año de nacimiento válido entre 1900 y 2100.');
+      return;
+    }
+
     onCalculate({
       name: name.trim() || 'Creador',
       birthDate,
@@ -140,6 +147,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             <input
               type="date"
               value={birthDate}
+              min="1900-01-01"
+              max="2100-12-31"
               onChange={(e) => setBirthDate(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-[#171b21] border border-[#232a35] text-[#f2efe9] text-sm focus:outline-none focus:border-[#c2a878] transition-colors technical-mono"
               required

@@ -10,14 +10,18 @@ interface DayTimelineProps {
 }
 
 export const DayTimeline: React.FC<DayTimelineProps> = ({ windows, onSelectWindow }) => {
-  // Hours from 06:00 to 24:00 (18 hours visible range)
-  const startHour = 6;
+  // Hours from 00:00 to 24:00 (full 24-hour range)
+  const startHour = 0;
   const endHour = 24;
-  const totalHours = endHour - startHour;
+  const totalHours = 24;
 
   const getPositionPercent = (timeStr: string) => {
-    const [h, m] = timeStr.split(':').map(Number);
-    const decimal = h + m / 60;
+    let [h, m] = timeStr.split(':').map(Number);
+    // If midnight at end of day, treat as 24:00
+    if (h === 0 && m === 0 && timeStr !== '00:00') {
+      h = 24;
+    }
+    const decimal = h + (m || 0) / 60;
     const clamped = Math.max(startHour, Math.min(endHour, decimal));
     return ((clamped - startHour) / totalHours) * 100;
   };
@@ -48,15 +52,15 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({ windows, onSelectWindo
 
       {/* Axis Hours Header */}
       <div className="relative w-full h-6 border-b border-[#232a35] text-[10px] technical-mono text-[#8a929e]">
-        {[6, 9, 12, 15, 18, 21, 24].map((hr) => {
-          const leftPct = ((hr - startHour) / totalHours) * 100;
+        {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((hr) => {
+          const leftPct = (hr / 24) * 100;
           return (
             <div
               key={hr}
               className="absolute -translate-x-1/2"
               style={{ left: `${leftPct}%` }}
             >
-              {hr === 24 ? '00:00' : `${hr}:00`}
+              {hr === 24 ? '24:00' : `${hr.toString().padStart(2, '0')}:00`}
             </div>
           );
         })}

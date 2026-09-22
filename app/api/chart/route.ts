@@ -23,6 +23,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const birthYear = parseInt(input.birthDate.split('-')[0], 10);
+    if (isNaN(birthYear) || birthYear < 1900 || birthYear > 2100) {
+      return NextResponse.json(
+        { error: 'Año de nacimiento inválido. Debe estar comprendido entre 1900 y 2100.' },
+        { status: 400 }
+      );
+    }
+
     // 1. Calculate Natal Chart
     const chart = await provider.calculateChart({
       input,

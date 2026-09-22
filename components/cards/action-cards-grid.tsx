@@ -30,6 +30,24 @@ export const ActionCardsGrid: React.FC<ActionCardsGridProps> = ({
     }
   };
 
+  // Pick best distinct window per category so cards don't show duplicates
+  const displayedWindows = React.useMemo(() => {
+    const seenCategories = new Set<string>();
+    const uniqueWindows: TimeWindow[] = [];
+
+    // Prioritize highest score window per category
+    const sorted = [...windows].sort((a, b) => b.score - a.score);
+    for (const w of sorted) {
+      if (!seenCategories.has(w.category)) {
+        seenCategories.add(w.category);
+        uniqueWindows.push(w);
+      }
+    }
+
+    // Sort by chronological start time for intuitive day planning
+    return uniqueWindows.sort((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, 4);
+  }, [windows]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -42,7 +60,7 @@ export const ActionCardsGrid: React.FC<ActionCardsGridProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {windows.slice(0, 4).map((w) => (
+        {displayedWindows.map((w) => (
           <div
             key={w.id}
             onClick={() => onSelectWindow(w)}

@@ -32,6 +32,12 @@ export function convertLocalToUtc(
   const month = parseInt(monthStr, 10);
   const day = parseInt(dayStr, 10);
 
+  if (isNaN(year) || year < 1800 || year > 2399) {
+    throw new Error(
+      `Año de nacimiento inválido (${year}). Por favor ingresá un año entre 1900 y 2100.`
+    );
+  }
+
   const localDt = DateTime.fromObject(
     { year, month, day, hour, minute, second },
     { zone: timezoneIana }
@@ -39,7 +45,7 @@ export function convertLocalToUtc(
 
   if (!localDt.isValid) {
     throw new Error(
-      `Invalid date/time/timezone combination: ${dateStr} ${safeTime} in ${timezoneIana}: ${localDt.invalidExplanation}`
+      `Fecha u hora inválida: ${dateStr} ${safeTime} (${timezoneIana}): ${localDt.invalidExplanation}`
     );
   }
 
